@@ -9,6 +9,14 @@ class VectorDB:
     A simple vector database wrapper using ChromaDB with HuggingFace embeddings.
     """
 
+    def get_content(doc:str) -> str:        
+        return doc
+    
+    def get_metadata(doc_index:int) -> str:        
+        return {"source": f"doc_{doc_index}"}
+
+   
+
     def __init__(self, collection_name: str = None, embedding_model: str = None):
         """
         Initialize the vector database.
@@ -39,7 +47,10 @@ class VectorDB:
 
         print(f"Vector database initialized with collection: {self.collection_name}")
 
-    def chunk_text(self, text: str, chunk_size: int = 500) -> List[str]:
+    
+
+
+    def chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
         """
         Simple text chunking by splitting on spaces and grouping into chunks.
 
@@ -68,8 +79,30 @@ class VectorDB:
         #
         # Feel free to try different approaches and see what works best!
 
+        if not text.strip():
+            return []
+
         chunks = []
-        # Your implementation here
+
+        # Your implementation here  - Option 1
+        words = text.split()
+        chunks = []
+        current_chunk = []
+        current_length = 0
+
+        for word in words:
+            current_chunk.append(word)
+            current_length += len(word) + 1  # +1 for space
+
+            if current_length >= chunk_size:
+                chunks.append(" ".join(current_chunk))
+                # Overlap: keep some words for next chunk
+                current_chunk = current_chunk[-overlap:] if overlap > 0 else []
+                current_length = sum(len(w) + 1 for w in current_chunk)
+
+        # Add the last chunk if not empty
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))    
 
         return chunks
 
@@ -89,9 +122,61 @@ class VectorDB:
         # HINT: Store the embeddings, documents, metadata, and IDs in your vector database
         # HINT: Print progress messages to inform the user
 
+
+        documentfordb = []
+        metadata = []        
+        ids = []
+        all_embeddings = []
+
+
         print(f"Processing {len(documents)} documents...")
         # Your implementation here
+
+        currentDocNumber = 0
+
+        for index, doc in enumerate(documents, start=1):
+            print(f"Processing Document number {index} started")
+            if isinstance(doc, str):
+                content = doc
+                source_metadata = {"source": f"doc_{index}"}
+            else:
+                content = doc.get("content", str(doc))
+                source_metadata = doc.get("metadata", {"source": f"doc_{index}"})
+            
+            currentDocNumber = index             
+            chunks = self.chunk_text(content,300)   
+            
+            if not chunks:
+                print(f"Warning: Document {currentDocNumber} produced no chunks. Skipping.")
+                continue
+            
+            # Generate embeddings for all chunks at once (faster)
+            embeddings = self.embedding_model.encode(chunks, show_progress_bar=False)
+            embeddings = embeddings.tolist()  # Chroma expects list of lists
+
+            for indexChunk, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                print(f"Processing chunk number {indexChunk} in Document number {index} started")
+                print(f"Chunk = {chunk}")
+                unique_id = f"doc_{index}_chunk_{indexChunk}"                
+                documentfordb.append(chunk)
+                ids.append(unique_id)
+                metadata.append({**source_metadata, "doc_number": index, "chunk_number": indexChunk})                     
+                all_embeddings.append(embedding)         
+
+        # Add everything to ChromaDB in one batch call (efficient!)
+        if ids:
+            self.collection.add(
+                ids=ids,
+                embeddings=all_embeddings,
+                documents=documentfordb,
+                metadatas=metadata
+            )
+            print(f"Successfully added {len(ids)} chunks to the vector database.")
+        else:
+            print("No chunks to add.")
+        
         print("Documents added to vector database")
+    
 
     def search(self, query: str, n_results: int = 5) -> Dict[str, Any]:
         """
@@ -112,9 +197,39 @@ class VectorDB:
         # HINT: Handle the case where results might be empty
 
         # Your implementation here
+
+        if not query.strip():
+            return {
+                "documents": [],
+                "metadatas": [],
+                "distances": [],
+                "ids": [],
+            }
+        
+        query_embedding = self.embedding_model.encode([query])  # Returns a 2D array: (1, embedding_dim)
+        query_embedding_list = query_embedding.tolist()[0]     # Convert to list of floats (1D)
+
+        #Perform similarity search in ChromaDB
+        results = self.collection.query(
+        query_embeddings=[query_embedding_list],  # Chroma expects list of embeddings
+        n_results=n_results,
+        include=["documents", "metadatas", "distances"]  # data to return
+        )
+
+        if not results["ids"] or not results["ids"][0]:
+            return {
+                "documents": [],
+                "metadatas": [],
+                "distances": [],
+                "ids": [],
+            }
+        
+        # return only first result
         return {
-            "documents": [],
-            "metadatas": [],
-            "distances": [],
-            "ids": [],
+        "documents": results["documents"][0],
+        "metadatas": results["metadatas"][0],
+        "distances": results["distances"][0],
+        "ids": results["ids"][0] if results["ids"] else [],
         }
+
+        
