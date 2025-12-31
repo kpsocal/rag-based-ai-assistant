@@ -7,6 +7,8 @@ from vectordb import VectorDB
 from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
+import fitz 
+import re
 
 # Load environment variables
 load_dotenv()
@@ -45,13 +47,17 @@ def load_documents() -> List[str]:
         return results
     
 
-    supported_extensions = {".txt", ".md"}
+    generic_supported_extensions = {".md"}
+    pdf_extensions = {".pdf"}
 
     for filename in os.listdir(data_dir):
         file_path = os.path.join(data_dir, filename)
         ext = os.path.splitext(filename)[1].lower()
+        print(f"Processing Document: {filename}")
+        year_match = re.search(r'(202[0-9])', filename)  # Finds 2024, 2025, etc.
+        year = year_match.group(1) if year_match else "Unknown"
 
-        if ext in supported_extensions and os.path.isfile(file_path):
+        if ext in generic_supported_extensions and os.path.isfile(file_path):
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
@@ -60,16 +66,52 @@ def load_documents() -> List[str]:
                     "content": content,
                     "metadata": {
                         "source": filename,
-                        "title": os.path.splitext(filename)[0]
+                        "title": os.path.splitext(filename)[0],
+                        "filetype":ext[1:],
+                        "year": int(year)
                     }
                 })
                 print(f"Loaded: {filename}")
             except Exception as e:
                 print(f"Error reading {filename}: {e}")
+        elif ext in pdf_extensions:
+            try:
+                print(f"Loading PDF: {filename}")
+                with fitz.open(file_path) as doc:  # Use context manager — auto-closes safely
+                    page_count = len(doc)
+
+                    text_pages = []
+                    for page in doc:
+                        text = page.get_text("text")
+                        text_pages.append(text)
+
+                    full_text = "\n\n".join(text_pages)
+
+                # Document auto-closed here — no manual close needed
+
+                print(f"Successfully loaded {filename} ({page_count} pages, ~{len(full_text)//1000}k characters)")
+
+                if full_text.strip():
+                    results.append({
+                        "content": full_text,
+                        "metadata": {
+                            "source": filename,
+                            "title": os.path.splitext(filename)[0],
+                            "filetype": "pdf",
+                            "page_count": page_count,
+                            "year": int(year)
+                        }
+                    })
+                    print(f"Added {filename} to knowledge base")
+                else:
+                    print(f"Warning: No readable text found in {filename}")
+
+            except Exception as e:
+                print(f"Error reading PDF {filename}: {e}")        
+
 
     if not results:
-        print("No documents found in 'data/' directory. Using built-in samples.")
-        # Add fallback samples if directory is empty
+        print("No documents found in 'data/' directory. Using built-in samples.")        
         results = []
     return results
 
@@ -171,45 +213,73 @@ Answer:
         print("Documents added successfully.")
 
     def invoke(self, input: str, n_results: int = 3) -> str:
-        """
-        Query the RAG assistant.
-
-        Args:
-            input: User's input
-            n_results: Number of relevant chunks to retrieve
-
-        Returns:
-            Dictionary containing the answer and retrieved context
-        """
-        llm_answer = ""
-        # TODO: Implement the RAG query pipeline
-        # HINT: Use self.vector_db.search() to retrieve relevant context chunks
-        # HINT: Combine the retrieved document chunks into a single context string
-        # HINT: Use self.chain.invoke() with context and question to generate the response
-        # HINT: Return a string answer from the LLM
-
-        # Your implementation here
         if not input.strip():
             return "Please ask a question."
-        
+
         print(f"\nSearching for relevant context for: '{input}'")
+        
         # Retrieve relevant chunks
         results = self.vector_db.search(input, n_results=n_results)
 
-        # Combine retrieved documents into context
-        context_pieces = results.get("documents", [])
-        if not context_pieces:
+        documents = results.get("documents", [])
+        metadatas = results.get("metadatas", [])
+
+        # for debugging only
+        #print(f"Retrieved {len(documents)} relevant chunks")
+        #for i, doc in enumerate(documents[:3]):  # Print first 3
+        #     print(f"Chunk {i+1}: {doc[:200]}...")  # First 200 chars
+
+        # Build context
+        if not documents:
             context = "No relevant information found in the knowledge base."
+            final_answer = self.chain.invoke({
+                "context": context,
+                "question": input
+            })
+            return final_answer  # → "I don't know..." with NO sources
+
         else:
-            context = "\n\n".join(context_pieces)
+            # There ARE relevant documents
+            context_pieces = []
+            for doc, meta in zip(documents, metadatas):
+                year = meta.get("year", "Unknown")
+                source = meta.get("source", "Unknown")
+                chunk_num = meta.get("chunk_number", "?")
+                prefix = f"[From fiscal {year} 10-K, {source}, Chunk {chunk_num}]\n"
+                context_pieces.append(prefix + doc)
+            
+            context = "\n\n".join(context_pieces)   
+            
+            
+            #context = "\n\n".join(documents)
 
-        # Invoke the chain with context and question
-        llm_answer = self.chain.invoke({
-            "context": context,
-            "question": input
-        })
+            # Build sources ONLY when we have real context
+            sources = []
+            seen = set()
+            for meta in metadatas:
+                source_file = meta.get("source", "Unknown file")
+                page = meta.get("page_number")
+                chunk = meta.get("chunk_number")
 
-        return llm_answer
+                if page is not None:
+                    citation = f"{source_file} (Page {page})"
+                else:
+                    citation = f"{source_file} (Chunk {chunk + 1 if chunk is not None else '?'})"
+
+                if citation not in seen:
+                    seen.add(citation)
+                    sources.append(citation)
+
+            source_note = "\n\n**Sources:**\n" + "\n".join(f"- {s}" for s in sources)
+
+            # Generate answer
+            llm_answer = self.chain.invoke({
+                "context": context,
+                "question": input
+            })
+
+            # Append sources only when we used real context
+            return llm_answer + source_note
 
 
 def main():
@@ -237,7 +307,7 @@ def main():
             if question.lower() == "quit":
                 done = True
             else:
-                answer = assistant.invoke(question, n_results=4)
+                answer = assistant.invoke(question, n_results=6)
                 print(f"\nAssistant: {answer}")
 
     except Exception as e:

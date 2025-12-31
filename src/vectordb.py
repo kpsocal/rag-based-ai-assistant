@@ -143,15 +143,18 @@ class VectorDB:
                 content = doc.get("content", str(doc))
                 source_metadata = doc.get("metadata", {"source": f"doc_{index}"})
             
+            contenttype = doc.get("metadata").get("filetype");
+            print(contenttype);
             currentDocNumber = index             
-            chunks = self.chunk_text(content,300)   
+            
+            chunks = self.chunk_text(content,2000)   
             
             if not chunks:
                 print(f"Warning: Document {currentDocNumber} produced no chunks. Skipping.")
                 continue
             
             # Generate embeddings for all chunks at once (faster)
-            embeddings = self.embedding_model.encode(chunks, show_progress_bar=False)
+            embeddings = self.embedding_model.encode(chunks, show_progress_bar=True)
             embeddings = embeddings.tolist()  # Chroma expects list of lists
 
             for indexChunk, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
