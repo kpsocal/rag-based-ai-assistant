@@ -96,6 +96,7 @@ class VectorDB:
 
             if current_length >= chunk_size:
                 chunks.append(" ".join(current_chunk))
+                
                 # Overlap: keep some words for next chunk
                 current_chunk = current_chunk[-overlap:] if overlap > 0 else []
                 current_length = sum(len(w) + 1 for w in current_chunk)
@@ -144,7 +145,7 @@ class VectorDB:
                 source_metadata = doc.get("metadata", {"source": f"doc_{index}"})
             
             contenttype = doc.get("metadata").get("filetype");
-            print(contenttype);
+            #print(contenttype);
             currentDocNumber = index             
             
             chunks = self.chunk_text(content,2000)   
@@ -159,7 +160,7 @@ class VectorDB:
 
             for indexChunk, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
                 print(f"Processing chunk number {indexChunk} in Document number {index} started")
-                print(f"Chunk = {chunk}")
+                #print(f"Chunk = {chunk}") #for debugging only
                 unique_id = f"doc_{index}_chunk_{indexChunk}"                
                 documentfordb.append(chunk)
                 ids.append(unique_id)

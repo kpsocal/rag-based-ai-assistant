@@ -47,7 +47,7 @@ def load_documents() -> List[str]:
         return results
     
 
-    generic_supported_extensions = {".md"}
+    generic_supported_extensions = {".txt", ".md"}
     pdf_extensions = {".pdf"}
 
     for filename in os.listdir(data_dir):
@@ -248,10 +248,7 @@ Answer:
                 prefix = f"[From fiscal {year} 10-K, {source}, Chunk {chunk_num}]\n"
                 context_pieces.append(prefix + doc)
             
-            context = "\n\n".join(context_pieces)   
-            
-            
-            #context = "\n\n".join(documents)
+            context = "\n\n".join(context_pieces)     
 
             # Build sources ONLY when we have real context
             sources = []
