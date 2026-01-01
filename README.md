@@ -1,5 +1,6 @@
 # An AI-Powered Assistant for Analyzing Corporate 10-K Filings: A RAG Approach
 
+
 ## 🤖 What is this?
 
 This repository introduces a Retrieval-Augmented Generation (RAG) based AI assistant designed to ingest PDF documents from company websites, such as annual 10-K filings submitted to the U.S. Securities and Exchange Commission (SEC) and provide answers to user queries. By leveraging vector databases, embedding models, and large language models (LLMs), the assistant enables efficient analysis of financial and operational data embedded in these reports.
@@ -78,9 +79,10 @@ python src/app.py
 
 Try these example questions:
 
-- "What is [topic from your documents]?"
-- "Explain [concept from your documents]"
-- "How does [process from your documents] work?"
+- What are the main risk factors for Google
+- Between 2023 and 2024, how much increase was in the revenue for Alphabet?
+- Compare cybersecurity risk factors between the 2024 and 2025 10-K filings
+- what was Alphabet revenue growth 2023 to 2024?
 
 ---
 
@@ -92,7 +94,7 @@ Try these example questions:
 
 Before starting, make sure you have:
 
-- Python 3.8 or higher installed
+- Python 3.13 installed
 - An API key from **one** of these providers:
   - [OpenAI](https://platform.openai.com/api-keys) (most popular)
   - [Groq](https://console.groq.com/keys) (free tier available)
