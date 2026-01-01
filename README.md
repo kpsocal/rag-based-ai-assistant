@@ -10,7 +10,7 @@ This is a **learning template** for building a RAG (Retrieval-Augmented Generati
 
 By completing this project, you'll have an AI assistant that can:
 
-- 📄 **Load your documents** (PDFs, text files, etc.)
+- 📄 **Load your documents** (PDFs, text files, etc.)  
 - 🔍 **Search through them** to find relevant information
 - 💬 **Answer questions** using the information it found
 - 🧠 **Combine multiple sources** to give comprehensive answers
@@ -32,7 +32,7 @@ You will implement a complete RAG system that can:
 
 The project requires implementing 7 main steps:
 
-1. **Prepare Your Documents** - Add your own documents to the data directory
+1. **Prepare Your Documents** - Add your own documents to the data directory - Only PDFs with the year in the filename. Example - Fiscal2023Form10KAlphabet.pdf
 2. **Document Loading** - Load documents from files into the system
 3. **Text Chunking** - Split documents into smaller, searchable chunks
 4. **Document Ingestion** - Process and store documents in the vector database  
