@@ -1,4 +1,4 @@
-# RAG-Based AI Assistant - AAIDC Project 1 Template
+# An AI-Powered Assistant for Analyzing Corporate 10-K Filings: A RAG Approach
 
 ## 🤖 What is this?
 
